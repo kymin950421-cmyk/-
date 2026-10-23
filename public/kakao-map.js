@@ -14,7 +14,7 @@
  };
  const imageObserver=new MutationObserver(secureImages);
  imageObserver.observe($('merchant-map'),{subtree:true,childList:true,attributes:true,attributeFilter:['src']});
- let map,clusterer,info,markers=new Map(),current=[],pending=null,ready=false,lastKey='',lastMembers='',pendingLocation=null,locationOverlay=null,radiusCircle=null,pendingRadius=null,lastRadius='',selectedMarker=null,selectedImage=null;
+ let map,clusterer,info,markers=new Map(),current=[],pending=null,ready=false,lastKey='',lastMembers='',pendingLocation=null,locationOverlay=null,radiusCircle=null,pendingRadius=null,lastRadius='',selectedMarker=null,selectedImage=null,pendingFocus=null;
  function updateStatus(){if(!map)return;const bounds=map.getBounds();const n=current.filter(m=>bounds.contain(new kakao.maps.LatLng(...m.location))).length;$('map-visible').textContent=`현재 지도 안 ${n.toLocaleString()}곳`;}
  function fit(){if(!current.length){map.setCenter(new kakao.maps.LatLng(37.427,127.13));map.setLevel(8);return;}const bounds=new kakao.maps.LatLngBounds();current.forEach(m=>bounds.extend(new kakao.maps.LatLng(...m.location)));map.setBounds(bounds,45,45,45,45);}
  function details(m){
@@ -63,7 +63,7 @@
    locationOverlay=new kakao.maps.CustomOverlay({position,content:dot,yAnchor:.5,zIndex:10});locationOverlay.setMap(map);
    if(nearby?.length){const bounds=new kakao.maps.LatLngBounds();nearby.forEach(p=>bounds.extend(new kakao.maps.LatLng(...p)));map.setBounds(bounds,45,45,45,45);}
    else{map.setLevel(5);map.setCenter(position);}
- },focus(id){const item=markers.get(id);if(!item)return;map.setLevel(2);map.setCenter(item.marker.getPosition());show(item.m,item.marker);}};
+ },focus(id){if(!ready){pendingFocus=id;return;}const item=markers.get(id);if(!item)return;map.setLevel(2);map.setCenter(item.marker.getPosition());show(item.m,item.marker);}};
  const script=document.createElement('script');script.src=`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(key)}&autoload=false&libraries=clusterer`;
  script.onerror=()=>{$('map-status').textContent='카카오 지도 연결 실패';$('tile-warning').textContent='카카오 지도에 연결하지 못했습니다. 앱 키, 등록된 웹 도메인과 네트워크 접근 설정을 확인해 주세요.';$('tile-warning').hidden=false;};
  script.onload=()=>{
@@ -103,6 +103,7 @@
     if(pending)window.merchantMap.update(...pending);
     if(pendingLocation)window.merchantMap.locate(...pendingLocation);
     if(pendingRadius)window.merchantMap.setRadius(...pendingRadius);
+    if(pendingFocus){const id=pendingFocus;pendingFocus=null;window.merchantMap.focus(id);}
    }catch{script.onerror();}
   });
  };

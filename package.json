@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "start": "node --use-env-proxy server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "data:collect": "node --use-env-proxy scripts/collect-official.mjs",
+    "data:import": "node scripts/import-official.mjs"
   },
   "engines": {
     "node": ">=24"

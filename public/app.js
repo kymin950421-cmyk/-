@@ -77,10 +77,11 @@ async function load() {
     const response = await fetch('/api/merchants'); if (!response.ok) throw new Error();
     data = await response.json();
     const demo = data.mode === 'demo';
-    $('notice').textContent = demo ? '체험 화면입니다. 아래 매장은 모두 가상 예시이며 실제 아동수당 사용처가 아닙니다. 공식 데이터 연결을 기다리고 있어요.' : data.error || `SN Child Pay 공개 목록 · 원본 기준: ${data.dataAsOf || '제공처 확인 필요'}. 현재 결제 가능 여부를 보장하지 않으니 방문 전에 확인하세요.`;
+    const sourceNotice=data.sourceMode==='official-snapshot' ? '신한카드 공식 조회에서 직접 수집한 목록입니다. 수집 시각 이후 변경될 수 있으니 방문 전 결제 가능 여부를 확인하세요.' : `${data.sourceName} · 원본 기준: ${data.dataAsOf || '제공처 확인 필요'}. 방문 전 결제 가능 여부를 확인하세요.`;
+    $('notice').textContent = demo ? '체험 화면입니다. 아래 매장은 모두 가상 예시이며 실제 아동수당 사용처가 아닙니다. 공식 데이터 연결을 기다리고 있어요.' : data.error || sourceNotice;
     $('notice').classList.toggle('live',!demo && !data.error);
     document.querySelector('.demo-toggle').hidden = !demo;
-    $('freshness').textContent = demo ? '공식 데이터 미연결 · 예시 데이터' : `출처: ${data.sourceName} · 마지막 수신: ${new Date(data.updatedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} (한국시간) · ${Math.round(data.refreshSeconds/60)}분마다 수신 확인${data.excludedCount ? ` · 지역 미확인 ${data.excludedCount}건 제외` : ''}`;
+    $('freshness').textContent = demo ? '공식 데이터 미연결 · 예시 데이터' : `출처: ${data.sourceName} · ${data.sourceMode==='official-snapshot'?'수집 시각':'마지막 수신'}: ${new Date(data.updatedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} (한국시간) · ${data.sourceMode==='official-snapshot'?'공식 조회 직접 수집 · 원본 기준일 미제공 · 수동 갱신':`${Math.round(data.refreshSeconds/60)}분마다 수신 확인`}${data.excludedCount ? ` · 지역 미확인 ${data.excludedCount}건 제외` : ''}`;
     $('source-link').hidden = !data.sourcePage; if(data.sourcePage) $('source-link').href = data.sourcePage;
     const cats = ['전체',...new Set([...Object.keys(icons).filter(c=>c!=='전체'),...data.merchants.map(m=>m.category)])];
     $('categories').replaceChildren();

@@ -11,6 +11,7 @@ const groups = [
  ['운동·여가',['스포츠센타/레포츠클럽','운동경기,레져용품','레저스포츠','당구장','실내골프장','대중목욕탕','관광여행사']],
 ];
 const categories = new Map(groups.flatMap(([group,items])=>items.map(item=>[item,group])));
+export function categoryForIndustry(industry) { return categories.get(industry.trim()) || '기타'; }
 export function convertSnFeed(rows) {
  if (!Array.isArray(rows) || rows.length > 50000 || !rows.length) throw new Error('제공처 목록 형식 오류');
  const merchants = [], seen = new Set(); let excludedCount = 0;
@@ -21,7 +22,7 @@ export function convertSnFeed(rows) {
   // Do not guess the district from coordinates or similarly named neighborhoods.
   const district = ['분당구','수정구','중원구'].find(d=>new RegExp(`성남시\\s+${d}`).test(row.a));
   if (!district) { excludedCount++; continue; }
-  merchants.push({id,name:row.n.trim(),category:categories.get(row.c.trim()) || '기타',district,address:row.a.trim(),industry:row.c.trim(),location:row.l});
+  merchants.push({id,name:row.n.trim(),category:categoryForIndustry(row.c),district,address:row.a.trim(),industry:row.c.trim(),location:row.l});
  }
  if(!merchants.length) throw new Error('유효한 성남시 가맹점 없음');
  return { merchants:validateFeed(merchants), sourceCount:rows.length, excludedCount };

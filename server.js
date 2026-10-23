@@ -3,15 +3,18 @@ import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { validateFeed } from './feed.js';
-import { DEFAULT_FEED, SOURCE_PAGE, convertSnFeed } from './provider.js';
+import { DEFAULT_FEED as LEGACY_FEED, SOURCE_PAGE as LEGACY_SOURCE_PAGE, convertSnFeed } from './provider.js';
+import { validateOfficialSnapshot } from './official-snapshot.js';
 const root = path.dirname(fileURLToPath(import.meta.url));
-const feedUrl = process.env.MERCHANT_FEED_URL || DEFAULT_FEED;
-const snProvider = feedUrl === DEFAULT_FEED;
-const sourceName = process.env.MERCHANT_SOURCE_NAME || (snProvider ? 'SN Child Pay 공개 GitHub 데이터' : '연결된 데이터 제공처');
-const sourcePage = process.env.MERCHANT_SOURCE_PAGE || (snProvider ? SOURCE_PAGE : '');
+const feedUrl = process.env.MERCHANT_FEED_URL || null;
+const officialSnapshot = feedUrl ? null : validateOfficialSnapshot(JSON.parse(await readFile(path.join(root,'data/official-merchants.json'),'utf8')));
+const snProvider = feedUrl === LEGACY_FEED;
+const sourceName = officialSnapshot ? officialSnapshot.sourceName : process.env.MERCHANT_SOURCE_NAME || (snProvider ? 'SN Child Pay 공개 GitHub 데이터' : '연결된 데이터 제공처');
+const sourcePage = officialSnapshot ? officialSnapshot.sourcePage : process.env.MERCHANT_SOURCE_PAGE || (snProvider ? LEGACY_SOURCE_PAGE : '');
 const interval = Math.max(60, Number(process.env.REFRESH_SECONDS) || 900);
 const cachePath = path.join(root, '.local', 'merchants.json');
 let state = { merchants: validateFeed(JSON.parse(await readFile(path.join(root, 'data/demo.json'), 'utf8'))), mode: 'demo', updatedAt: null, lastAttemptAt: null, error: null };
+if(officialSnapshot) state={...state,merchants:officialSnapshot.merchants,mode:'live',updatedAt:officialSnapshot.collectedAt,sourceCount:officialSnapshot.sourceCount,excludedCount:officialSnapshot.excludedCount};
 if (feedUrl) {
   if (!feedUrl.startsWith('https://')) throw new Error('MERCHANT_FEED_URL은 HTTPS 주소여야 합니다.');
   try {
@@ -63,7 +66,7 @@ const server = http.createServer(async (req,res) => {
   }
   if (url.pathname === '/api/merchants') {
     res.setHeader('Content-Type','application/json; charset=utf-8');
-    return res.end(JSON.stringify({ ...state, dataAsOf: snProvider ? '2025년 6월 (제공처 README 기준)' : null, sourceCount: state.sourceCount ?? null, excludedCount: state.excludedCount ?? null, sourceName: state.mode === 'live' ? sourceName : '화면 체험용 가상 데이터', sourcePage: state.mode === 'live' && /^https:\/\//.test(sourcePage) ? sourcePage : null, refreshSeconds: feedUrl ? interval : null }));
+    return res.end(JSON.stringify({ ...state, sourceMode:officialSnapshot?'official-snapshot':'remote-feed', dataAsOf:officialSnapshot?null:snProvider?'제공처 기준일 확인 필요':null, collectedAt:officialSnapshot?.collectedAt || null, unmappedCount:officialSnapshot?.unmappedCount ?? null, sourceCount: state.sourceCount ?? null, excludedCount: state.excludedCount ?? null, sourceName: state.mode === 'live' ? sourceName : '화면 체험용 가상 데이터', sourcePage: state.mode === 'live' && /^https:\/\//.test(sourcePage) ? sourcePage : null, refreshSeconds: feedUrl ? interval : null }));
   }
   const vendor = vendorFiles[url.pathname];
   if(vendor) {
@@ -77,4 +80,4 @@ const server = http.createServer(async (req,res) => {
 });
 server.listen(Number(process.env.PORT) || 3000, '0.0.0.0', () => console.log('서버 시작 완료'));
 await refresh();
-setInterval(refresh, interval * 1000).unref();
+if(feedUrl) setInterval(refresh, interval * 1000).unref();
