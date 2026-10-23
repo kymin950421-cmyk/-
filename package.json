@@ -1,0 +1,16 @@
+{
+  "name": "seongnam-child-benefit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --use-env-proxy server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "leaflet": "1.9.4",
+    "leaflet.markercluster": "1.5.3"
+  }
+}

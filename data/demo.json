@@ -1,0 +1,8 @@
+[
+{"id":"demo-1","name":"예시 · 동네책방","category":"도서·문구","district":"분당구","address":"분당구 정자동 · 실제 가맹점 아님"},
+{"id":"demo-2","name":"예시 · 우리아이약국","category":"병원·약국","district":"수정구","address":"수정구 신흥동 · 실제 가맹점 아님"},
+{"id":"demo-3","name":"예시 · 가족식탁","category":"음식점","district":"중원구","address":"중원구 성남동 · 실제 가맹점 아님"},
+{"id":"demo-4","name":"예시 · 초록마트","category":"마트·식품","district":"분당구","address":"분당구 야탑동 · 실제 가맹점 아님"},
+{"id":"demo-5","name":"예시 · 작은옷장","category":"의류·잡화","district":"수정구","address":"수정구 태평동 · 실제 가맹점 아님"},
+{"id":"demo-6","name":"예시 · 즐거운배움","category":"교육·문화","district":"중원구","address":"중원구 금광동 · 실제 가맹점 아님"}
+]

@@ -1,0 +1,75 @@
+// Keep the map visible beside search and results.
+const main=document.querySelector('main');
+const sidebar=document.createElement('div');sidebar.className='map-sidebar';
+for(const selector of ['.hero','#notice','.browse','.results','.guide','footer']){const section=main.querySelector(selector);if(section)sidebar.append(section);}
+main.prepend(sidebar);main.classList.add('map-app');
+if(!window.mapConfig?.kakaoKey){
+ const message=document.createElement('p');message.className='map-warning';message.id='kakao-setup';message.textContent='카카오 지도 연결 대기 · 본인 앱의 JavaScript 키와 사이트 도메인 등록이 필요합니다. 현재는 참고 지도입니다.';document.querySelector('.map-section').prepend(message);
+}
+const $ = id => document.getElementById(id);
+const icons = {'전체':'✦','음식점':'🥄🍴','마트·식품':'▧','병원·약국':'✚','도서·문구':'▤','의류·미용':'♧','교육·문화':'♫','운동·여가':'◉','기타':'◇'};
+let data = null, category = '', foodType = '', page = 1;
+const pageSize = 60;
+function element(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
+function render() {
+  if (!data) return;
+  const query = $('search').value.trim().toLocaleLowerCase();
+  const district = $('district').value;
+  const demo = data.mode === 'demo';
+  const visible = demo && !$('showDemo').checked ? [] : data.merchants;
+  const baseList = visible.filter(m => (!category || m.category === category) && (!district || m.district === district) && `${m.name} ${m.address} ${m.industry || m.category} ${(m.foodTypes || []).join(' ')}`.toLocaleLowerCase().includes(query));
+  const list = baseList.filter(m=>!foodType || (m.foodTypes || []).includes(foodType));
+  $('food-panel').hidden = category !== '음식점';
+  $('food-types').replaceChildren();
+  const foodTypes = ['전체','한식','일식','중식','양식','피자','치킨','돈까스','분식','카페·디저트','패스트푸드','주점','기타 음식점'];
+  for (const type of foodTypes) {
+    const button=element('button');const value=type==='전체'?'':type;
+    const count=baseList.filter(m=>m.category==='음식점'&&(!value||(m.foodTypes||[]).includes(value))).length;
+    button.append(element('span',type),element('small',count.toLocaleString()));button.classList.toggle('selected',foodType===value);button.setAttribute('aria-pressed',String(foodType===value));
+    button.onclick=()=>{foodType=value;page=1;render();};$('food-types').append(button);
+  }
+  list.sort((a,b) => ($('sort').value === 'district' ? a.district.localeCompare(b.district,'ko') : 0) || a.name.localeCompare(b.name,'ko'));
+  window.merchantMap?.update(list,data.updatedAt || data.mode);
+  $('count').textContent = list.length.toLocaleString();
+  $('cards').replaceChildren();
+  const pages = Math.max(1,Math.ceil(list.length/pageSize)); page = Math.min(page,pages);
+  $('page-label').textContent = `${page} / ${pages} 페이지`; $('previous').disabled = page <= 1; $('next').disabled = page >= pages; $('pagination').hidden = list.length <= pageSize;
+  for (const m of list.slice((page-1)*pageSize,page*pageSize)) {
+    const card = element('article',null,'card');
+    const top = element('div',null,'card-top');
+    top.append(element('span',icons[m.category] || '◇','shop-icon'), element('span',demo ? '예시 데이터' : '제공처 수록','badge'));
+    card.append(top,element('div',m.industry ? `${m.category} · ${m.industry}` : m.category,'category-label'),element('h3',m.name),element('p',m.address,'address'));
+    if(m.foodTypes?.length) card.append(element('div',`${m.foodTypes.join(' · ')}${m.foodClassification==='매장명 추정'?' · 매장명 추정':''}`,'food-tag'));
+    const bottom = element('div',null,'card-bottom'); bottom.append(element('span',m.district));
+    if (!demo && m.location) { const button=element('button','지도에서 보기','map-card-button'); button.onclick=()=>window.merchantMap?.focus(m.id); bottom.append(button); }
+    else if (!demo) { const link = element('a','지도에서 찾기 ↗'); link.href = 'https://map.naver.com/p/search/' + encodeURIComponent(`${m.name} ${m.address}`); link.target='_blank'; link.rel='noopener noreferrer'; bottom.append(link); }
+    else bottom.append(element('span','실제 사용처 아님'));
+    card.append(bottom); $('cards').append(card);
+  }
+  $('empty').hidden = list.length > 0;
+  $('empty-message').textContent = demo && !$('showDemo').checked ? '공식 데이터가 아직 연결되지 않았습니다. 예시 화면 보기로 기능을 체험할 수 있어요.' : '검색어나 필터를 바꿔보세요.';
+  $('active-filters').textContent = [district,category,foodType,query && `“${$('search').value.trim()}”`].filter(Boolean).join(' · ');
+  for (const button of $('categories').children) { const active = button.dataset.category === category; button.classList.toggle('selected',active); button.setAttribute('aria-pressed',String(active)); }
+}
+async function load() {
+  try {
+    const response = await fetch('/api/merchants'); if (!response.ok) throw new Error();
+    data = await response.json();
+    const demo = data.mode === 'demo';
+    $('notice').textContent = demo ? '체험 화면입니다. 아래 매장은 모두 가상 예시이며 실제 아동수당 사용처가 아닙니다. 공식 데이터 연결을 기다리고 있어요.' : data.error || `SN Child Pay 공개 목록 · 원본 기준: ${data.dataAsOf || '제공처 확인 필요'}. 현재 결제 가능 여부를 보장하지 않으니 방문 전에 확인하세요.`;
+    $('notice').classList.toggle('live',!demo && !data.error);
+    document.querySelector('.demo-toggle').hidden = !demo;
+    $('freshness').textContent = demo ? '공식 데이터 미연결 · 예시 데이터' : `출처: ${data.sourceName} · 마지막 수신: ${new Date(data.updatedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} (한국시간) · ${Math.round(data.refreshSeconds/60)}분마다 수신 확인${data.excludedCount ? ` · 지역 미확인 ${data.excludedCount}건 제외` : ''}`;
+    $('source-link').hidden = !data.sourcePage; if(data.sourcePage) $('source-link').href = data.sourcePage;
+    const cats = ['전체',...new Set([...Object.keys(icons).filter(c=>c!=='전체'),...data.merchants.map(m=>m.category)])];
+    $('categories').replaceChildren();
+    for (const c of cats) { const b=element('button'); b.dataset.category=c==='전체'?'':c; b.append(element('span',icons[c] || '◇'),element('strong',c)); b.onclick=()=>{category=b.dataset.category;foodType='';page=1;render();}; $('categories').append(b); }
+    render();
+  } catch { $('notice').textContent = '서버에서 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'; }
+}
+for (const id of ['search','district','sort','showDemo']) $(id).addEventListener(id==='search'?'input':'change',()=>{page=1;render();});
+$('reset').onclick = () => { $('search').value=''; $('district').value=''; category='';foodType='';page=1;render(); };
+document.querySelectorAll('[data-search]').forEach(b=>b.onclick=()=>{$('search').value=b.dataset.search;page=1;render();});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){e.preventDefault();$('search').focus();}});
+$('previous').onclick=()=>{page--;render();}; $('next').onclick=()=>{page++;render();};
+load(); setInterval(load,60000);

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: airang-seongnam
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm test
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: KAKAO_MAP_JAVASCRIPT_KEY
+        sync: false
