@@ -15,7 +15,8 @@
  const imageObserver=new MutationObserver(secureImages);
  imageObserver.observe($('merchant-map'),{subtree:true,childList:true,attributes:true,attributeFilter:['src']});
  let map,clusterer,info,markers=new Map(),current=[],pending=null,ready=false,lastKey='',lastMembers='',pendingLocation=null,locationOverlay=null,radiusCircle=null,pendingRadius=null,lastRadius='',selectedMarker=null,selectedImage=null,pendingFocus=null,hasPainted=false;
- function updateStatus(){if(!map)return;const bounds=map.getBounds();const n=current.filter(m=>bounds.contain(new kakao.maps.LatLng(...m.location))).length;$('map-visible').textContent=`현재 지도 안 ${n.toLocaleString()}곳`;}
+ function getBounds(){if(!map)return null;const b=map.getBounds(),sw=b.getSouthWest(),ne=b.getNorthEast();return {south:sw.getLat(),west:sw.getLng(),north:ne.getLat(),east:ne.getLng()};}
+ function updateStatus(){if(!map)return;const bounds=map.getBounds();const n=current.filter(m=>bounds.contain(new kakao.maps.LatLng(...m.location))).length;$('map-visible').textContent=`현재 지도 안 ${n.toLocaleString()}곳`;window.dispatchEvent(new Event('merchant-map-view'));}
  function fit(){if(!current.length){map.setCenter(new kakao.maps.LatLng(37.427,127.13));map.setLevel(8);return;}const bounds=new kakao.maps.LatLngBounds();current.forEach(m=>bounds.extend(new kakao.maps.LatLng(...m.location)));map.setBounds(bounds,45,45,45,45);}
  function details(m){
   const box=node('div');box.className='map-popup kakao-popup selected-callout';box.setAttribute('role','region');box.setAttribute('aria-label','선택한 가맹점');
@@ -38,7 +39,7 @@
   info.setContent(box);info.open(map,marker);
   window.dispatchEvent(new CustomEvent('merchant-selected',{detail:{id:m.id}}));
  }
- window.merchantMap={update(list,version,options={}){
+ window.merchantMap={getBounds,update(list,version,options={}){
   pending=[list,version,options];
   if(!ready){$('map-status').textContent='카카오 지도를 불러오는 중입니다…';return;}
   $('district-counts').replaceChildren();

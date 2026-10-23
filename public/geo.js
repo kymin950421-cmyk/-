@@ -14,3 +14,10 @@ export function formatDistance(km) {
 export function isWithinRadius(km, radius) {
   return radius === 0 || (Number.isFinite(km) && km <= radius);
 }
+
+export function isWithinBounds(location, bounds) {
+  if (!bounds) return true;
+  if (!Array.isArray(location) || location.length !== 2 || !location.every(Number.isFinite)) return false;
+  const [lat,lng] = location;
+  return lat >= bounds.south && lat <= bounds.north && (bounds.west <= bounds.east ? lng >= bounds.west && lng <= bounds.east : lng >= bounds.west || lng <= bounds.east);
+}

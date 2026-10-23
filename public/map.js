@@ -5,10 +5,12 @@
  let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null,selectedMarker=null,radiusCircle=null,lastRadius='',hasPainted=false;
  const centers={'분당구':[37.382,127.117],'수정구':[37.456,127.106],'중원구':[37.434,127.164]};
  const colors={'분당구':'#518e71','수정구':'#91b2a3','중원구':'#719b96'};
+ function getBounds(){if(!map)return null;const b=map.getBounds();return {south:b.getSouth(),north:b.getNorth(),west:b.getWest(),east:b.getEast()};}
  function status(){
   if(!map)return;
   const n=displayed.filter(m=>map.getBounds().contains(m.location)).length;
   $('map-visible').textContent=`현재 지도 안 ${n.toLocaleString()}곳`;
+  window.dispatchEvent(new Event('merchant-map-view'));
  }
  function init(){
   if(map)return true;
@@ -36,7 +38,7 @@
   box.append(node('small',m.foodTypes?.length ? `${m.foodTypes.join(' · ')} · ${m.foodClassification}` : m.industry || m.category),node('h3',m.name),node('p',m.address),node('p','제공처 등록 위치 · 방문 전 결제 가능 여부 확인'));
   const link=node('a','네이버 지도에서 확인 ↗');link.href='https://map.naver.com/p/search/'+encodeURIComponent(`${m.name} ${m.address}`);link.target='_blank';link.rel='noopener noreferrer';box.append(link);return box;
  }
- window.merchantMap={
+ window.merchantMap={getBounds,
   update(list,version,options={}){
    if(!init())return;
    const withLocations=list.filter(m=>Array.isArray(m.location));

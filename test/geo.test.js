@@ -10,3 +10,13 @@ test('반경 경계 포함, 반경 밖과 좌표 없는 매장 제외, 제한 �
  const {isWithinRadius}=await import('../public/geo.js');
  assert.equal(isWithinRadius(1,1),true);assert.equal(isWithinRadius(1.00001,1),false);assert.equal(isWithinRadius(Infinity,3),false);assert.equal(isWithinRadius(Infinity,0),true);
 });
+
+test('지도 영역은 경계를 포함하고 영역 밖·좌표 없는 매장을 제외한다',async()=>{
+ const {isWithinBounds}=await import('../public/geo.js');
+ const bounds={south:37.3,north:37.5,west:127,east:127.2};
+ assert.equal(isWithinBounds([37.3,127.2],bounds),true);
+ assert.equal(isWithinBounds([37.4,127.20001],bounds),false);
+ assert.equal(isWithinBounds(undefined,bounds),false);
+ assert.equal(isWithinBounds([NaN,127],bounds),false);
+ assert.equal(isWithinBounds(undefined,null),true);
+});

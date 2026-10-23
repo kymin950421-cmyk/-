@@ -1,4 +1,4 @@
-import { distanceKm, formatDistance, isWithinRadius } from './geo.js';
+import { distanceKm, formatDistance, isWithinRadius, isWithinBounds } from './geo.js';
 // Keep the map visible beside search and results.
 const main=document.querySelector('main');
 const sidebar=document.createElement('div');sidebar.className='map-sidebar';
@@ -12,17 +12,18 @@ const icons = {'전체':'✦','음식점':'🥄🍴','마트·식품':'▧','병
 let data = null, category = '', foodType = '', page = 1;
 const pageSize = 60;
 let clusterIds = null, selectedMerchant = null, userLocation = null, locationRequested = false, locationPending = false;
-let distances = new Map(), radiusKm = 0;
+let distances = new Map(), radiusKm = 0, areaBounds = null;
 function element(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
 function render({updateMap=true,preserveView=true} = {}) {
   if (!data) return;
+  updateAreaButton();
   const query = $('search').value.trim().toLocaleLowerCase();
   const district = $('district').value;
   const demo = data.mode === 'demo';
   const visible = demo && !$('showDemo').checked ? [] : data.merchants;
   const baseList = visible.filter(m => isWithinRadius(distances.get(m.id) ?? Infinity,radiusKm) && (!category || m.category === category) && (!district || m.district === district) && `${m.name} ${m.address} ${m.industry || m.category} ${(m.foodTypes || []).join(' ')}`.toLocaleLowerCase().includes(query));
   const matches = baseList.filter(m=>!foodType || (m.foodTypes || []).includes(foodType));
-  const list = matches.filter(m=>!clusterIds || clusterIds.has(m.id));
+  const list = matches.filter(m=>isWithinBounds(m.location,areaBounds) && (!clusterIds || clusterIds.has(m.id)));
   $('food-panel').hidden = category !== '음식점';
   $('food-types').replaceChildren();
   const foodTypes = ['전체','한식','일식','중식','양식','피자','치킨','돈까스','분식','카페·디저트','패스트푸드','주점','기타 음식점'];
@@ -39,8 +40,8 @@ function render({updateMap=true,preserveView=true} = {}) {
   }
   document.querySelectorAll('[data-radius]').forEach(button=>{const value=Number(button.dataset.radius);button.disabled=value>0&&!userLocation;button.setAttribute('aria-pressed',String(value===radiusKm));});
   $('radius-hint').textContent=!userLocation?'위치를 허용하면 선택할 수 있어요.':radiusKm?`내 위치에서 직선 ${radiusKm}km 이내 · 좌표 없는 매장 제외`:'내 위치 기준 직선거리 · 모든 성남시 가맹점';
-  $('cluster-selection').hidden = !clusterIds;
-  $('cluster-label').textContent = `선택한 지도 묶음 · ${list.length.toLocaleString()}곳`;
+  $('cluster-selection').hidden = !clusterIds && !areaBounds;
+  $('cluster-label').textContent = `${areaBounds ? '이 지도 영역' : '선택한 지도 묶음'} · ${list.length.toLocaleString()}곳`;
 
   $('count').textContent = list.length.toLocaleString();
   $('cards').replaceChildren();
@@ -68,7 +69,7 @@ function render({updateMap=true,preserveView=true} = {}) {
     card.append(bottom); $('cards').append(card);
   }
   $('empty').hidden = list.length > 0;
-  $('empty-message').textContent = demo && !$('showDemo').checked ? '공식 데이터가 아직 연결되지 않았습니다. 예시 화면 보기로 기능을 체험할 수 있어요.' : radiusKm ? `${radiusKm}km 안에 조건에 맞는 매장이 없어요. 거리를 넓히거나 필터를 바꿔보세요.` : '검색어나 필터를 바꿔보세요.';
+  $('empty-message').textContent = demo && !$('showDemo').checked ? '공식 데이터가 아직 연결되지 않았습니다. 예시 화면 보기로 기능을 체험할 수 있어요.' : areaBounds ? '이 지도 영역에 조건에 맞는 매장이 없어요. 지도를 옮겨 다시 검색하거나 전체 결과 보기를 눌러주세요.' : radiusKm ? `${radiusKm}km 안에 조건에 맞는 매장이 없어요. 거리를 넓히거나 필터를 바꿔보세요.` : '검색어나 필터를 바꿔보세요.';
   $('active-filters').textContent = [radiusKm && `내 주변 ${radiusKm}km`,district,category,foodType,query && `“${$('search').value.trim()}”`].filter(Boolean).join(' · ');
   for (const button of $('categories').children) { const active = button.dataset.category === category; button.classList.toggle('selected',active); button.setAttribute('aria-pressed',String(active)); }
 }
@@ -90,8 +91,8 @@ async function load() {
     if(!locationRequested) requestLocation();
   } catch { $('notice').textContent = '서버에서 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'; }
 }
-for (const id of ['search','district','sort','showDemo']) $(id).addEventListener(id==='search'?'input':'change',()=>{if(id!=='sort')clusterIds=null;page=1;render({preserveView:id!=='district'});});
-$('reset').onclick = () => { $('search').value=''; $('district').value=''; category='';foodType='';radiusKm=0;clusterIds=null;page=1;render(); };
+for (const id of ['search','district','sort','showDemo']) $(id).addEventListener(id==='search'?'input':'change',()=>{if(id!=='sort')clusterIds=null;if(id==='district')areaBounds=null;page=1;render({preserveView:id!=='district'});});
+$('reset').onclick = () => { $('search').value=''; $('district').value=''; category='';foodType='';radiusKm=0;areaBounds=null;clusterIds=null;page=1;render(); };
 document.querySelectorAll('[data-search]').forEach(b=>b.onclick=()=>{$('search').value=b.dataset.search;clusterIds=null;page=1;render();});
 document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){e.preventDefault();$('search').focus();}});
 $('previous').onclick=()=>{page--;render();}; $('next').onclick=()=>{page++;render();};
@@ -107,7 +108,7 @@ function requestLocation({returnToUser=false} = {}){
     locationPending=false;$('map-locate').disabled=false;$('map-locate').setAttribute('aria-busy','false');$('locate').disabled=false;
     const {latitude,longitude}=position.coords;
     if(!Number.isFinite(latitude)||!Number.isFinite(longitude)){$('location-status').textContent='위치 정보를 확인하지 못했습니다.';return;}
-    userLocation=[latitude,longitude];updateDistances();$('distance-sort').disabled=false;$('sort').value='distance';clusterIds=null;page=1;render();
+    userLocation=[latitude,longitude];updateDistances();$('distance-sort').disabled=false;$('sort').value='distance';areaBounds=null;clusterIds=null;page=1;render();
     const nearest=data?.merchants.filter(m=>m.location).sort((a,b)=>distances.get(a.id)-distances.get(b.id)).slice(0,5)||[];
     const far=nearest.length && distances.get(nearest[0].id)>30;
     $('location-status').textContent=far?'성남시와 거리가 있어요. 가까운 성남시 가맹점순으로 표시합니다.':'내 위치 기준 가까운순 · 거리는 직선거리입니다.';
@@ -120,24 +121,37 @@ function requestLocation({returnToUser=false} = {}){
 }
 document.querySelectorAll('[data-radius]').forEach(button=>button.onclick=()=>{
   const value=Number(button.dataset.radius);if(value&&!userLocation)return;
-  radiusKm=value;clusterIds=null;selectedMerchant=null;page=1;render();
+  radiusKm=value;areaBounds=null;clusterIds=null;selectedMerchant=null;page=1;render();
 });
 $('locate').onclick=requestLocation;
 $('map-locate').onclick=()=>{
   if(!userLocation){requestLocation({returnToUser:true});return;}
-  clusterIds=null;selectedMerchant=null;page=1;$('sort').value='distance';render();
+  areaBounds=null;clusterIds=null;selectedMerchant=null;page=1;$('sort').value='distance';render();
   window.merchantMap?.locate(userLocation);
   if(radiusKm)window.merchantMap?.setRadius(userLocation,radiusKm,true);
   $('location-status').textContent='확인한 내 위치로 돌아왔어요. 업종·거리 조건은 유지합니다.';
   requestLocation({returnToUser:true});
 };
-$('clear-cluster').onclick=()=>{clusterIds=null;page=1;render({updateMap:false});};
+$('clear-cluster').onclick=()=>{areaBounds=null;clusterIds=null;page=1;render({updateMap:false});};
 window.addEventListener('merchant-selected',event=>{
   selectedMerchant=event.detail.id;
   document.querySelectorAll('.selectable-card').forEach(card=>card.classList.toggle('is-selected',card.dataset.merchantId===selectedMerchant));
 });
 window.addEventListener('merchant-cluster-select',event=>{
-  clusterIds=new Set(event.detail.ids);page=1;selectedMerchant=null;render({updateMap:false});
+  areaBounds=null;clusterIds=new Set(event.detail.ids);page=1;selectedMerchant=null;render({updateMap:false});
   document.querySelector('.map-sidebar').scrollTo({top:$('cluster-selection').offsetTop-document.querySelector('.map-sidebar').offsetTop-10,behavior:'smooth'});
 });
+function updateAreaButton() {
+  const bounds=window.merchantMap?.getBounds();
+  $('map-search-area').disabled=!bounds || !data;
+  const same=areaBounds && bounds && ['south','north','west','east'].every(key=>Math.abs(bounds[key]-areaBounds[key])<0.000001);
+  $('map-search-area').textContent=same?'이 영역 검색 완료':areaBounds?'이 지도 영역 다시 검색':'이 지도 영역에서 검색';
+}
+$('map-search-area').onclick=()=>{
+  const bounds=window.merchantMap?.getBounds();if(!bounds || !data)return;
+  areaBounds={...bounds};clusterIds=null;selectedMerchant=null;page=1;
+  render({updateMap:false});updateAreaButton();
+};
+$('map-fit').addEventListener('click',()=>{areaBounds=null;clusterIds=null;page=1;render({updateMap:false});updateAreaButton();});
+window.addEventListener('merchant-map-view',updateAreaButton);
 load(); setInterval(load,60000);
