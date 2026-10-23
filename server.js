@@ -37,7 +37,7 @@ async function refresh() {
     state = { ...state, merchants, mode: 'live', updatedAt, sourceCount, excludedCount, error: null };
   } catch { state.error = '데이터 갱신에 실패했습니다. 마지막 수신 상태를 확인하세요.'; }
 }
-const files = { '/theme.css':['theme.css','text/css; charset=utf-8'], '/districts.json':['districts.json','application/json; charset=utf-8'], '/kakao-map.js':['kakao-map.js','text/javascript; charset=utf-8'], '/map.js':['map.js','text/javascript; charset=utf-8'], '/': ['index.html','text/html; charset=utf-8'], '/app.js':['app.js','text/javascript; charset=utf-8'], '/style.css':['style.css','text/css; charset=utf-8'] };
+const files = { '/geo.js':['geo.js','text/javascript; charset=utf-8'], '/theme.css':['theme.css','text/css; charset=utf-8'], '/districts.json':['districts.json','application/json; charset=utf-8'], '/kakao-map.js':['kakao-map.js','text/javascript; charset=utf-8'], '/map.js':['map.js','text/javascript; charset=utf-8'], '/': ['index.html','text/html; charset=utf-8'], '/app.js':['app.js','text/javascript; charset=utf-8'], '/style.css':['style.css','text/css; charset=utf-8'] };
 const vendorFiles = {
  '/vendor/leaflet.js':['leaflet/dist/leaflet.js','text/javascript; charset=utf-8'],
  '/vendor/leaflet.css':['leaflet/dist/leaflet.css','text/css; charset=utf-8'],

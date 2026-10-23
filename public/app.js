@@ -1,3 +1,4 @@
+import { distanceKm, formatDistance } from './geo.js';
 // Keep the map visible beside search and results.
 const main=document.querySelector('main');
 const sidebar=document.createElement('div');sidebar.className='map-sidebar';
@@ -10,15 +11,18 @@ const $ = id => document.getElementById(id);
 const icons = {'전체':'✦','음식점':'🥄🍴','마트·식품':'▧','병원·약국':'✚','도서·문구':'▤','의류·미용':'♧','교육·문화':'♫','운동·여가':'◉','기타':'◇'};
 let data = null, category = '', foodType = '', page = 1;
 const pageSize = 60;
+let clusterIds = null, selectedMerchant = null, userLocation = null, locationRequested = false, locationPending = false;
+let distances = new Map();
 function element(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
-function render() {
+function render({updateMap=true} = {}) {
   if (!data) return;
   const query = $('search').value.trim().toLocaleLowerCase();
   const district = $('district').value;
   const demo = data.mode === 'demo';
   const visible = demo && !$('showDemo').checked ? [] : data.merchants;
   const baseList = visible.filter(m => (!category || m.category === category) && (!district || m.district === district) && `${m.name} ${m.address} ${m.industry || m.category} ${(m.foodTypes || []).join(' ')}`.toLocaleLowerCase().includes(query));
-  const list = baseList.filter(m=>!foodType || (m.foodTypes || []).includes(foodType));
+  const matches = baseList.filter(m=>!foodType || (m.foodTypes || []).includes(foodType));
+  const list = matches.filter(m=>!clusterIds || clusterIds.has(m.id));
   $('food-panel').hidden = category !== '음식점';
   $('food-types').replaceChildren();
   const foodTypes = ['전체','한식','일식','중식','양식','피자','치킨','돈까스','분식','카페·디저트','패스트푸드','주점','기타 음식점'];
@@ -26,22 +30,34 @@ function render() {
     const button=element('button');const value=type==='전체'?'':type;
     const count=baseList.filter(m=>m.category==='음식점'&&(!value||(m.foodTypes||[]).includes(value))).length;
     button.append(element('span',type),element('small',count.toLocaleString()));button.classList.toggle('selected',foodType===value);button.setAttribute('aria-pressed',String(foodType===value));
-    button.onclick=()=>{foodType=value;page=1;render();};$('food-types').append(button);
+    button.onclick=()=>{foodType=value;clusterIds=null;page=1;render();};$('food-types').append(button);
   }
-  list.sort((a,b) => ($('sort').value === 'district' ? a.district.localeCompare(b.district,'ko') : 0) || a.name.localeCompare(b.name,'ko'));
-  window.merchantMap?.update(list,data.updatedAt || data.mode);
+  list.sort((a,b) => ($('sort').value === 'distance' && userLocation ? (distances.get(a.id) ?? Infinity) - (distances.get(b.id) ?? Infinity) : $('sort').value === 'district' ? a.district.localeCompare(b.district,'ko') : 0) || a.name.localeCompare(b.name,'ko'));
+  if(updateMap) window.merchantMap?.update(matches,data.updatedAt || data.mode);
+  $('cluster-selection').hidden = !clusterIds;
+  $('cluster-label').textContent = `선택한 지도 묶음 · ${list.length.toLocaleString()}곳`;
+
   $('count').textContent = list.length.toLocaleString();
   $('cards').replaceChildren();
   const pages = Math.max(1,Math.ceil(list.length/pageSize)); page = Math.min(page,pages);
   $('page-label').textContent = `${page} / ${pages} 페이지`; $('previous').disabled = page <= 1; $('next').disabled = page >= pages; $('pagination').hidden = list.length <= pageSize;
   for (const m of list.slice((page-1)*pageSize,page*pageSize)) {
     const card = element('article',null,'card');
+    card.dataset.merchantId=m.id;
+    if(!demo && m.location) {
+      card.classList.add('selectable-card');card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label',`${m.name} 지도에서 보기`);
+      card.classList.toggle('is-selected',selectedMerchant===m.id);
+      const choose=()=>{selectedMerchant=m.id;document.querySelectorAll('.card.is-selected').forEach(c=>c.classList.remove('is-selected'));card.classList.add('is-selected');window.merchantMap?.focus(m.id);};
+      card.addEventListener('click',event=>{if(event.target.closest('a,button'))return;choose();});
+      card.addEventListener('keydown',event=>{if(event.target===card && ['Enter',' '].includes(event.key)){event.preventDefault();choose();}});
+    }
+
     const top = element('div',null,'card-top');
     top.append(element('span',icons[m.category] || '◇','shop-icon'), element('span',demo ? '예시 데이터' : '제공처 수록','badge'));
     card.append(top,element('div',m.industry ? `${m.category} · ${m.industry}` : m.category,'category-label'),element('h3',m.name),element('p',m.address,'address'));
     if(m.foodTypes?.length) card.append(element('div',`${m.foodTypes.join(' · ')}${m.foodClassification==='매장명 추정'?' · 매장명 추정':''}`,'food-tag'));
     const bottom = element('div',null,'card-bottom'); bottom.append(element('span',m.district));
-    if (!demo && m.location) { const button=element('button','지도에서 보기','map-card-button'); button.onclick=()=>window.merchantMap?.focus(m.id); bottom.append(button); }
+    if (!demo && m.location) bottom.append(element('span',userLocation ? formatDistance(distances.get(m.id) ?? Infinity) : '눌러서 위치 보기','distance-label'));
     else if (!demo) { const link = element('a','지도에서 찾기 ↗'); link.href = 'https://map.naver.com/p/search/' + encodeURIComponent(`${m.name} ${m.address}`); link.target='_blank'; link.rel='noopener noreferrer'; bottom.append(link); }
     else bottom.append(element('span','실제 사용처 아님'));
     card.append(bottom); $('cards').append(card);
@@ -63,13 +79,42 @@ async function load() {
     $('source-link').hidden = !data.sourcePage; if(data.sourcePage) $('source-link').href = data.sourcePage;
     const cats = ['전체',...new Set([...Object.keys(icons).filter(c=>c!=='전체'),...data.merchants.map(m=>m.category)])];
     $('categories').replaceChildren();
-    for (const c of cats) { const b=element('button'); b.dataset.category=c==='전체'?'':c; b.append(element('span',icons[c] || '◇'),element('strong',c)); b.onclick=()=>{category=b.dataset.category;foodType='';page=1;render();}; $('categories').append(b); }
-    render();
+    for (const c of cats) { const b=element('button'); b.dataset.category=c==='전체'?'':c; b.append(element('span',icons[c] || '◇'),element('strong',c)); b.onclick=()=>{category=b.dataset.category;foodType='';clusterIds=null;page=1;render();}; $('categories').append(b); }
+    updateDistances();render();
+    if(!locationRequested) requestLocation();
   } catch { $('notice').textContent = '서버에서 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'; }
 }
-for (const id of ['search','district','sort','showDemo']) $(id).addEventListener(id==='search'?'input':'change',()=>{page=1;render();});
-$('reset').onclick = () => { $('search').value=''; $('district').value=''; category='';foodType='';page=1;render(); };
-document.querySelectorAll('[data-search]').forEach(b=>b.onclick=()=>{$('search').value=b.dataset.search;page=1;render();});
+for (const id of ['search','district','sort','showDemo']) $(id).addEventListener(id==='search'?'input':'change',()=>{if(id!=='sort')clusterIds=null;page=1;render();});
+$('reset').onclick = () => { $('search').value=''; $('district').value=''; category='';foodType='';clusterIds=null;page=1;render(); };
+document.querySelectorAll('[data-search]').forEach(b=>b.onclick=()=>{$('search').value=b.dataset.search;clusterIds=null;page=1;render();});
 document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){e.preventDefault();$('search').focus();}});
 $('previous').onclick=()=>{page--;render();}; $('next').onclick=()=>{page++;render();};
+function updateDistances(){
+  distances=new Map();if(!userLocation || !data)return;
+  for(const m of data.merchants)distances.set(m.id,distanceKm(userLocation,m.location));
+}
+function requestLocation(){
+  if(locationPending)return;locationRequested=true;
+  if(!navigator.geolocation){$('location-status').textContent='이 브라우저는 위치 확인을 지원하지 않습니다.';return;}
+  locationPending=true;$('locate').disabled=true;$('location-status').textContent='위치 확인 중… 브라우저의 위치 권한을 허용해 주세요.';
+  navigator.geolocation.getCurrentPosition(position=>{
+    locationPending=false;$('locate').disabled=false;
+    const {latitude,longitude}=position.coords;
+    if(!Number.isFinite(latitude)||!Number.isFinite(longitude)){$('location-status').textContent='위치 정보를 확인하지 못했습니다.';return;}
+    userLocation=[latitude,longitude];updateDistances();$('distance-sort').disabled=false;$('sort').value='distance';clusterIds=null;page=1;render();
+    const nearest=data?.merchants.filter(m=>m.location).sort((a,b)=>distances.get(a.id)-distances.get(b.id)).slice(0,5)||[];
+    const far=nearest.length && distances.get(nearest[0].id)>30;
+    $('location-status').textContent=far?'성남시와 거리가 있어요. 가까운 성남시 가맹점순으로 표시합니다.':'내 위치 기준 가까운순 · 거리는 직선거리입니다.';
+    window.merchantMap?.locate(userLocation,far?nearest.map(m=>m.location):null);
+  },error=>{
+    locationPending=false;$('locate').disabled=false;
+    $('location-status').textContent=userLocation?'위치를 갱신하지 못했어요. 마지막 확인 위치를 기준으로 표시합니다.':error.code===1?'위치 권한이 꺼져 있어요. 전체 가맹점을 보여드립니다.':error.code===3?'위치 확인 시간이 초과됐어요. 내 위치를 눌러 다시 시도하세요.':'위치를 확인할 수 없어요. 전체 목록을 이용할 수 있습니다.';
+  },{enableHighAccuracy:false,timeout:10000,maximumAge:60000});
+}
+$('locate').onclick=requestLocation;
+$('clear-cluster').onclick=()=>{clusterIds=null;page=1;render({updateMap:false});};
+window.addEventListener('merchant-cluster-select',event=>{
+  clusterIds=new Set(event.detail.ids);page=1;selectedMerchant=null;render({updateMap:false});
+  document.querySelector('.map-sidebar').scrollTo({top:$('cluster-selection').offsetTop-document.querySelector('.map-sidebar').offsetTop-10,behavior:'smooth'});
+});
 load(); setInterval(load,60000);

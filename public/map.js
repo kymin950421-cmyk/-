@@ -2,7 +2,7 @@
  if(window.mapConfig?.kakaoKey)return;
  const $ = id=>document.getElementById(id);
  const node=(tag,text)=>{const el=document.createElement(tag);if(text)el.textContent=text;return el;};
- let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0;
+ let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null;
  const centers={'분당구':[37.382,127.117],'수정구':[37.456,127.106],'중원구':[37.434,127.164]};
  const colors={'분당구':'#518e71','수정구':'#91b2a3','중원구':'#719b96'};
  function status(){
@@ -21,7 +21,7 @@
   tiles.on('tileload',()=>{tileErrors=0;$('tile-warning').hidden=true;});
   map.attributionControl.addAttribution('참고 경계: <a href="https://github.com/southkorea/southkorea-maps" target="_blank" rel="noopener noreferrer">통계청 2013 / southkorea-maps</a>');
   clusters=L.markerClusterGroup({maxClusterRadius:60,chunkedLoading:true,chunkInterval:40,chunkDelay:10,animate:false,spiderfyOnMaxZoom:true,showCoverageOnHover:false,iconCreateFunction:cluster=>L.divIcon({html:`<span>${cluster.getChildCount().toLocaleString()}</span>`,className:'merchant-cluster',iconSize:[52,52]})});
-  clusters.on('clusterclick',e=>{if(e.layer.getChildCount()>1)$('map-status').textContent=`${e.layer.getChildCount().toLocaleString()}곳이 모여 있어요. 확대하거나 숫자를 다시 눌러 개별 위치를 확인하세요.`;});
+  clusters.on('clusterclick',e=>{window.dispatchEvent(new CustomEvent('merchant-cluster-select',{detail:{ids:e.layer.getAllChildMarkers().map(marker=>marker.merchantId)}}));});
   map.addLayer(clusters);
   map.on('moveend',status);
   fetch('/districts.json').then(r=>{if(!r.ok)throw new Error();return r.json();}).then(geo=>{
@@ -40,7 +40,7 @@
   update(list,version){
    if(!init())return;
    const withLocations=list.filter(m=>Array.isArray(m.location));
-   const key=version+'|'+list.map(m=>m.id).join(',');
+   const members=list.map(m=>m.id).join(',');const key=version+'|'+members;const shouldFit=members!==lastMembers;lastMembers=members;
    const counts=$('district-counts');counts.replaceChildren();
    for(const district of Object.keys(centers)){
     const n=list.filter(m=>m.district===district).length;
@@ -55,11 +55,17 @@
    clusters.clearLayers();markers.clear();
    const layers=withLocations.map(m=>{
     const marker=L.marker(m.location,{title:m.name,keyboard:true,icon:L.divIcon({className:'merchant-pin',html:'<span></span>',iconSize:[22,28],iconAnchor:[11,28],popupAnchor:[0,-27]})});
-    marker.bindPopup(()=>popup(m)); markers.set(m.id,marker);return marker;
+    marker.merchantId=m.id;marker.bindPopup(()=>popup(m)); markers.set(m.id,marker);return marker;
    });
    clusters.addLayers(layers);
-   if(withLocations.length)fit();else if(firstLoad)map.setView([37.427,127.13],12);
+   if(withLocations.length && shouldFit)fit();else if(firstLoad)map.setView([37.427,127.13],12);
    status();
+  },
+  locate(location,nearby){
+   if(!init())return;
+   if(locationDot)map.removeLayer(locationDot);
+   locationDot=L.circleMarker(location,{radius:8,color:'white',weight:3,fillColor:'#287bea',fillOpacity:1}).addTo(map).bindTooltip('내 현재 위치');
+   if(nearby?.length)map.fitBounds(L.latLngBounds(nearby),{padding:[35,35],maxZoom:16});else map.setView(location,15);
   },
   focus(id){const marker=markers.get(id);if(!marker)return;document.getElementById('merchant-map').scrollIntoView({behavior:'smooth',block:'center'});map.setView(marker.getLatLng(),18);clusters.zoomToShowLayer(marker,()=>marker.openPopup());}
  };
