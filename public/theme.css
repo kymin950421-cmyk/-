@@ -18,3 +18,10 @@ header{height:68px;padding:12px 24px;border-bottom:1px solid var(--line);box-sha
  .leaflet-popup-content{margin:12px 30px 12px 12px;max-width:210px}
  .leaflet-container a.leaflet-popup-close-button{width:32px;height:36px;line-height:36px}
 }
+/* Own the complete callout frame rather than clipping the SDK info-window shell. */
+.selected-callout{position:relative;transform:translateY(-57px);border:1px solid #b9c6bf;border-radius:10px;background:#fff;box-shadow:0 4px 16px #19372b26;white-space:normal}
+.selected-callout:after{content:"";position:absolute;left:50%;bottom:-7px;width:12px;height:12px;transform:translateX(-50%) rotate(45deg);background:white;border-right:1px solid #b9c6bf;border-bottom:1px solid #b9c6bf;pointer-events:none}
+.selected-callout .popup-close{position:absolute;right:3px;top:3px;float:none;width:36px;height:36px;font-size:23px;padding:0;line-height:36px;border-radius:6px}
+.selected-callout h3{padding-right:22px}
+@media(max-width:760px){.kakao-popup.selected-callout{width:224px;max-width:calc(100vw - 110px);padding:12px 42px 12px 13px;min-height:44px}.selected-callout h3{padding:0;font-size:14px;line-height:1.5;-webkit-line-clamp:3}.selected-callout .popup-close{top:3px;right:3px}.selected-callout .colocated-select{font-weight:650;font-size:13px}}
+.merchant-pin.is-selected-pin span{background:#e0443e;box-shadow:0 0 0 5px #e0443e24,0 3px 9px #7a211f45;transform:rotate(-45deg) scale(1.2)}

@@ -2,7 +2,7 @@
  if(window.mapConfig?.kakaoKey)return;
  const $ = id=>document.getElementById(id);
  const node=(tag,text)=>{const el=document.createElement(tag);if(text)el.textContent=text;return el;};
- let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null,radiusCircle=null,lastRadius='';
+ let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null,selectedMarker=null,radiusCircle=null,lastRadius='';
  const centers={'분당구':[37.382,127.117],'수정구':[37.456,127.106],'중원구':[37.434,127.164]};
  const colors={'분당구':'#518e71','수정구':'#91b2a3','중원구':'#719b96'};
  function status(){
@@ -55,7 +55,10 @@
    clusters.clearLayers();markers.clear();
    const layers=withLocations.map(m=>{
     const marker=L.marker(m.location,{title:m.name,keyboard:true,icon:L.divIcon({className:'merchant-pin',html:'<span></span>',iconSize:[22,28],iconAnchor:[11,28],popupAnchor:[0,-27]})});
-    marker.merchantId=m.id;marker.bindPopup(()=>popup(m)); markers.set(m.id,marker);return marker;
+    marker.merchantId=m.id;marker.bindPopup(()=>popup(m));
+    marker.on('popupopen',()=>{if(selectedMarker)selectedMarker.getElement()?.classList.remove('is-selected-pin');selectedMarker=marker;marker.getElement()?.classList.add('is-selected-pin');marker.setZIndexOffset(1000);window.dispatchEvent(new CustomEvent('merchant-selected',{detail:{id:m.id}}));});
+    marker.on('popupclose',()=>{marker.getElement()?.classList.remove('is-selected-pin');marker.setZIndexOffset(0);if(selectedMarker===marker){selectedMarker=null;window.dispatchEvent(new CustomEvent('merchant-selected',{detail:{id:null}}));}});
+ markers.set(m.id,marker);return marker;
    });
    clusters.addLayers(layers);
    if(withLocations.length && shouldFit)fit();else if(firstLoad)map.setView([37.427,127.13],12);

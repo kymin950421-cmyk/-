@@ -122,6 +122,10 @@ document.querySelectorAll('[data-radius]').forEach(button=>button.onclick=()=>{
 });
 $('locate').onclick=requestLocation;
 $('clear-cluster').onclick=()=>{clusterIds=null;page=1;render({updateMap:false});};
+window.addEventListener('merchant-selected',event=>{
+  selectedMerchant=event.detail.id;
+  document.querySelectorAll('.selectable-card').forEach(card=>card.classList.toggle('is-selected',card.dataset.merchantId===selectedMerchant));
+});
 window.addEventListener('merchant-cluster-select',event=>{
   clusterIds=new Set(event.detail.ids);page=1;selectedMerchant=null;render({updateMap:false});
   document.querySelector('.map-sidebar').scrollTo({top:$('cluster-selection').offsetTop-document.querySelector('.map-sidebar').offsetTop-10,behavior:'smooth'});
