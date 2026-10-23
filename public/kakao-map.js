@@ -14,7 +14,7 @@
  };
  const imageObserver=new MutationObserver(secureImages);
  imageObserver.observe($('merchant-map'),{subtree:true,childList:true,attributes:true,attributeFilter:['src']});
- let map,clusterer,info,markers=new Map(),current=[],pending=null,ready=false,lastKey='',lastMembers='',pendingLocation=null,locationOverlay=null,radiusCircle=null,pendingRadius=null,lastRadius='',selectedMarker=null,selectedImage=null,pendingFocus=null;
+ let map,clusterer,info,markers=new Map(),current=[],pending=null,ready=false,lastKey='',lastMembers='',pendingLocation=null,locationOverlay=null,radiusCircle=null,pendingRadius=null,lastRadius='',selectedMarker=null,selectedImage=null,pendingFocus=null,hasPainted=false;
  function updateStatus(){if(!map)return;const bounds=map.getBounds();const n=current.filter(m=>bounds.contain(new kakao.maps.LatLng(...m.location))).length;$('map-visible').textContent=`현재 지도 안 ${n.toLocaleString()}곳`;}
  function fit(){if(!current.length){map.setCenter(new kakao.maps.LatLng(37.427,127.13));map.setLevel(8);return;}const bounds=new kakao.maps.LatLngBounds();current.forEach(m=>bounds.extend(new kakao.maps.LatLng(...m.location)));map.setBounds(bounds,45,45,45,45);}
  function details(m){
@@ -38,12 +38,12 @@
   info.setContent(box);info.open(map,marker);
   window.dispatchEvent(new CustomEvent('merchant-selected',{detail:{id:m.id}}));
  }
- window.merchantMap={update(list,version){
-  pending=[list,version];
+ window.merchantMap={update(list,version,options={}){
+  pending=[list,version,options];
   if(!ready){$('map-status').textContent='카카오 지도를 불러오는 중입니다…';return;}
   $('district-counts').replaceChildren();
   for(const district of ['분당구','수정구','중원구']){const b=node('button');b.append(node('span',district),node('strong',`${list.filter(m=>m.district===district).length.toLocaleString()}곳`));b.onclick=()=>{$('district').value=district;$('district').dispatchEvent(new Event('change'));};$('district-counts').append(b);}
-  const members=list.map(m=>m.id).join(',');const signature=version+'|'+members;if(signature===lastKey){updateStatus();return;}const shouldFit=members!==lastMembers;lastMembers=members;lastKey=signature;
+  const members=list.map(m=>m.id).join(',');const signature=version+'|'+members;if(signature===lastKey){updateStatus();return;}const shouldFit=!hasPainted || (!options.preserveView && members!==lastMembers);hasPainted=true;lastMembers=members;lastKey=signature;
   current=list.filter(m=>Array.isArray(m.location));info.close();clusterer.clear();markers.clear();
   const layers=current.map(m=>{const marker=new kakao.maps.Marker({position:new kakao.maps.LatLng(...m.location),title:m.name});marker.merchantId=m.id;kakao.maps.event.addListener(marker,'click',()=>show(m,marker));markers.set(m.id,{marker,m});return marker;});
   clusterer.addMarkers(layers);$('map-status').textContent=`카카오 지도 · 위치 표시 ${current.length.toLocaleString()}곳 · 좌표 없는 ${list.length-current.length}곳은 목록에서 확인`;
@@ -56,7 +56,7 @@
    radiusCircle=new kakao.maps.Circle({map,center:new kakao.maps.LatLng(...location),radius:radius*1000,strokeWeight:2,strokeColor:'#008a43',strokeOpacity:.55,fillColor:'#008a43',fillOpacity:.06});
    map.setBounds(radiusCircle.getBounds(),30,30,30,30);
  },locate(location,nearby){
-   pendingLocation=[location,nearby];if(!ready)return;
+   pendingLocation=[location,nearby];if(!ready)return;info.close();
    const position=new kakao.maps.LatLng(...location);
    if(locationOverlay)locationOverlay.setMap(null);
    const dot=node('div');dot.className='user-position';dot.setAttribute('role','img');dot.setAttribute('aria-label','내 현재 위치');dot.title='내 현재 위치';

@@ -14,7 +14,7 @@ const pageSize = 60;
 let clusterIds = null, selectedMerchant = null, userLocation = null, locationRequested = false, locationPending = false;
 let distances = new Map(), radiusKm = 0;
 function element(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
-function render({updateMap=true} = {}) {
+function render({updateMap=true,preserveView=true} = {}) {
   if (!data) return;
   const query = $('search').value.trim().toLocaleLowerCase();
   const district = $('district').value;
@@ -34,8 +34,8 @@ function render({updateMap=true} = {}) {
   }
   list.sort((a,b) => ($('sort').value === 'distance' && userLocation ? (distances.get(a.id) ?? Infinity) - (distances.get(b.id) ?? Infinity) : $('sort').value === 'district' ? a.district.localeCompare(b.district,'ko') : 0) || a.name.localeCompare(b.name,'ko'));
   if(updateMap) {
-    window.merchantMap?.update(matches,data.updatedAt || data.mode);
-    window.merchantMap?.setRadius(userLocation,radiusKm,matches.length===0);
+    window.merchantMap?.update(matches,data.updatedAt || data.mode,{preserveView});
+    window.merchantMap?.setRadius(userLocation,radiusKm);
   }
   document.querySelectorAll('[data-radius]').forEach(button=>{const value=Number(button.dataset.radius);button.disabled=value>0&&!userLocation;button.setAttribute('aria-pressed',String(value===radiusKm));});
   $('radius-hint').textContent=!userLocation?'위치를 허용하면 선택할 수 있어요.':radiusKm?`내 위치에서 직선 ${radiusKm}km 이내 · 좌표 없는 매장 제외`:'내 위치 기준 직선거리 · 모든 성남시 가맹점';
@@ -90,7 +90,7 @@ async function load() {
     if(!locationRequested) requestLocation();
   } catch { $('notice').textContent = '서버에서 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'; }
 }
-for (const id of ['search','district','sort','showDemo']) $(id).addEventListener(id==='search'?'input':'change',()=>{if(id!=='sort')clusterIds=null;page=1;render();});
+for (const id of ['search','district','sort','showDemo']) $(id).addEventListener(id==='search'?'input':'change',()=>{if(id!=='sort')clusterIds=null;page=1;render({preserveView:id!=='district'});});
 $('reset').onclick = () => { $('search').value=''; $('district').value=''; category='';foodType='';radiusKm=0;clusterIds=null;page=1;render(); };
 document.querySelectorAll('[data-search]').forEach(b=>b.onclick=()=>{$('search').value=b.dataset.search;clusterIds=null;page=1;render();});
 document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){e.preventDefault();$('search').focus();}});
@@ -99,21 +99,22 @@ function updateDistances(){
   distances=new Map();if(!userLocation || !data)return;
   for(const m of data.merchants)distances.set(m.id,distanceKm(userLocation,m.location));
 }
-function requestLocation(){
+function requestLocation({returnToUser=false} = {}){
   if(locationPending)return;locationRequested=true;
   if(!navigator.geolocation){$('location-status').textContent='이 브라우저는 위치 확인을 지원하지 않습니다.';return;}
-  locationPending=true;$('locate').disabled=true;$('location-status').textContent='위치 확인 중… 브라우저의 위치 권한을 허용해 주세요.';
+  locationPending=true;$('map-locate').disabled=true;$('map-locate').setAttribute('aria-busy','true');$('locate').disabled=true;$('location-status').textContent='위치 확인 중… 브라우저의 위치 권한을 허용해 주세요.';
   navigator.geolocation.getCurrentPosition(position=>{
-    locationPending=false;$('locate').disabled=false;
+    locationPending=false;$('map-locate').disabled=false;$('map-locate').setAttribute('aria-busy','false');$('locate').disabled=false;
     const {latitude,longitude}=position.coords;
     if(!Number.isFinite(latitude)||!Number.isFinite(longitude)){$('location-status').textContent='위치 정보를 확인하지 못했습니다.';return;}
     userLocation=[latitude,longitude];updateDistances();$('distance-sort').disabled=false;$('sort').value='distance';clusterIds=null;page=1;render();
     const nearest=data?.merchants.filter(m=>m.location).sort((a,b)=>distances.get(a.id)-distances.get(b.id)).slice(0,5)||[];
     const far=nearest.length && distances.get(nearest[0].id)>30;
     $('location-status').textContent=far?'성남시와 거리가 있어요. 가까운 성남시 가맹점순으로 표시합니다.':'내 위치 기준 가까운순 · 거리는 직선거리입니다.';
-    window.merchantMap?.locate(userLocation,far?nearest.map(m=>m.location):null);
+    window.merchantMap?.locate(userLocation,far&&!returnToUser?nearest.map(m=>m.location):null);
+    if(radiusKm&&returnToUser)window.merchantMap?.setRadius(userLocation,radiusKm,true);
   },error=>{
-    locationPending=false;$('locate').disabled=false;
+    locationPending=false;$('map-locate').disabled=false;$('map-locate').setAttribute('aria-busy','false');$('locate').disabled=false;
     $('location-status').textContent=userLocation?'위치를 갱신하지 못했어요. 마지막 확인 위치를 기준으로 표시합니다.':error.code===1?'위치 권한이 꺼져 있어요. 전체 가맹점을 보여드립니다.':error.code===3?'위치 확인 시간이 초과됐어요. 내 위치를 눌러 다시 시도하세요.':'위치를 확인할 수 없어요. 전체 목록을 이용할 수 있습니다.';
   },{enableHighAccuracy:false,timeout:10000,maximumAge:60000});
 }
@@ -122,6 +123,14 @@ document.querySelectorAll('[data-radius]').forEach(button=>button.onclick=()=>{
   radiusKm=value;clusterIds=null;selectedMerchant=null;page=1;render();
 });
 $('locate').onclick=requestLocation;
+$('map-locate').onclick=()=>{
+  if(!userLocation){requestLocation({returnToUser:true});return;}
+  clusterIds=null;selectedMerchant=null;page=1;$('sort').value='distance';render();
+  window.merchantMap?.locate(userLocation);
+  if(radiusKm)window.merchantMap?.setRadius(userLocation,radiusKm,true);
+  $('location-status').textContent='확인한 내 위치로 돌아왔어요. 업종·거리 조건은 유지합니다.';
+  requestLocation({returnToUser:true});
+};
 $('clear-cluster').onclick=()=>{clusterIds=null;page=1;render({updateMap:false});};
 window.addEventListener('merchant-selected',event=>{
   selectedMerchant=event.detail.id;

@@ -2,7 +2,7 @@
  if(window.mapConfig?.kakaoKey)return;
  const $ = id=>document.getElementById(id);
  const node=(tag,text)=>{const el=document.createElement(tag);if(text)el.textContent=text;return el;};
- let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null,selectedMarker=null,radiusCircle=null,lastRadius='';
+ let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null,selectedMarker=null,radiusCircle=null,lastRadius='',hasPainted=false;
  const centers={'분당구':[37.382,127.117],'수정구':[37.456,127.106],'중원구':[37.434,127.164]};
  const colors={'분당구':'#518e71','수정구':'#91b2a3','중원구':'#719b96'};
  function status(){
@@ -37,10 +37,10 @@
   const link=node('a','네이버 지도에서 확인 ↗');link.href='https://map.naver.com/p/search/'+encodeURIComponent(`${m.name} ${m.address}`);link.target='_blank';link.rel='noopener noreferrer';box.append(link);return box;
  }
  window.merchantMap={
-  update(list,version){
+  update(list,version,options={}){
    if(!init())return;
    const withLocations=list.filter(m=>Array.isArray(m.location));
-   const members=list.map(m=>m.id).join(',');const key=version+'|'+members;const shouldFit=members!==lastMembers;lastMembers=members;
+   const members=list.map(m=>m.id).join(',');const key=version+'|'+members;const shouldFit=!hasPainted || (!options.preserveView && members!==lastMembers);hasPainted=true;lastMembers=members;
    const counts=$('district-counts');counts.replaceChildren();
    for(const district of Object.keys(centers)){
     const n=list.filter(m=>m.district===district).length;
@@ -72,7 +72,7 @@
    map.fitBounds(radiusCircle.getBounds(),{padding:[25,25]});
   },
   locate(location,nearby){
-   if(!init())return;
+   if(!init())return;map.closePopup();
    if(locationDot)map.removeLayer(locationDot);
    locationDot=L.circleMarker(location,{radius:8,color:'white',weight:3,fillColor:'#287bea',fillOpacity:1}).addTo(map).bindTooltip('내 현재 위치');
    if(nearby?.length)map.fitBounds(L.latLngBounds(nearby),{padding:[35,35],maxZoom:16});else map.setView(location,15);
