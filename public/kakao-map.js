@@ -26,7 +26,12 @@
  function show(m,marker){
   const box=details(m);
   const colocated=current.filter(other=>other.location[0]===m.location[0]&&other.location[1]===m.location[1]);
-  if(colocated.length>1){const choices=node('div');choices.className='same-location';choices.append(node('p',`같은 좌표에 ${colocated.length}곳 · 매장을 선택하세요`));for(const other of colocated){const button=node('button',other.name);button.onclick=()=>show(other,markers.get(other.id).marker);choices.append(button);}box.append(choices);}
+  if(colocated.length>1){
+   box.classList.add('has-colocated');
+   const select=node('select');select.className='colocated-select';select.setAttribute('aria-label','같은 위치의 가맹점 선택');
+   for(const other of colocated){const option=node('option',other.name);option.value=other.id;option.selected=other.id===m.id;select.append(option);}
+   select.onchange=()=>{const item=markers.get(select.value);if(item)show(item.m,item.marker);};box.append(select);
+   const choices=node('div');choices.className='same-location';choices.append(node('p',`같은 좌표에 ${colocated.length}곳 · 매장을 선택하세요`));for(const other of colocated){const button=node('button',other.name);button.onclick=()=>show(other,markers.get(other.id).marker);choices.append(button);}box.append(choices);}
   info.setContent(box);info.open(map,marker);
  }
  window.merchantMap={update(list,version){
