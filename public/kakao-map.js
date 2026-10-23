@@ -14,7 +14,7 @@
  };
  const imageObserver=new MutationObserver(secureImages);
  imageObserver.observe($('merchant-map'),{subtree:true,childList:true,attributes:true,attributeFilter:['src']});
- let map,clusterer,info,markers=new Map(),current=[],pending=null,ready=false,lastKey='',lastMembers='',pendingLocation=null,locationOverlay=null;
+ let map,clusterer,info,markers=new Map(),current=[],pending=null,ready=false,lastKey='',lastMembers='',pendingLocation=null,locationOverlay=null,radiusCircle=null,pendingRadius=null,lastRadius='';
  function updateStatus(){if(!map)return;const bounds=map.getBounds();const n=current.filter(m=>bounds.contain(new kakao.maps.LatLng(...m.location))).length;$('map-visible').textContent=`현재 지도 안 ${n.toLocaleString()}곳`;}
  function fit(){if(!current.length){map.setCenter(new kakao.maps.LatLng(37.427,127.13));map.setLevel(8);return;}const bounds=new kakao.maps.LatLngBounds();current.forEach(m=>bounds.extend(new kakao.maps.LatLng(...m.location)));map.setBounds(bounds,45,45,45,45);}
  function details(m){
@@ -39,6 +39,13 @@
   const layers=current.map(m=>{const marker=new kakao.maps.Marker({position:new kakao.maps.LatLng(...m.location),title:m.name});marker.merchantId=m.id;kakao.maps.event.addListener(marker,'click',()=>show(m,marker));markers.set(m.id,{marker,m});return marker;});
   clusterer.addMarkers(layers);$('map-status').textContent=`카카오 지도 · 위치 표시 ${current.length.toLocaleString()}곳 · 좌표 없는 ${list.length-current.length}곳은 목록에서 확인`;
   if(shouldFit)fit();updateStatus();
+ },setRadius(location,radius,force=false){
+   pendingRadius=[location,radius];if(!ready)return;
+   const signature=JSON.stringify(pendingRadius);if(signature===lastRadius&&!force)return;lastRadius=signature;
+   if(radiusCircle){radiusCircle.setMap(null);radiusCircle=null;}
+   if(!location || !radius)return;
+   radiusCircle=new kakao.maps.Circle({map,center:new kakao.maps.LatLng(...location),radius:radius*1000,strokeWeight:2,strokeColor:'#008a43',strokeOpacity:.55,fillColor:'#008a43',fillOpacity:.06});
+   map.setBounds(radiusCircle.getBounds(),30,30,30,30);
  },locate(location,nearby){
    pendingLocation=[location,nearby];if(!ready)return;
    const position=new kakao.maps.LatLng(...location);
@@ -71,6 +78,7 @@
     $('map-fit').onclick=fit;ready=true;$('tile-warning').hidden=true;
     if(pending)window.merchantMap.update(...pending);
     if(pendingLocation)window.merchantMap.locate(...pendingLocation);
+    if(pendingRadius)window.merchantMap.setRadius(...pendingRadius);
    }catch{script.onerror();}
   });
  };

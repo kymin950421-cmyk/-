@@ -10,3 +10,7 @@ export function formatDistance(km) {
   if (!Number.isFinite(km)) return '거리 정보 없음';
   return km < 1 ? `직선 ${Math.round(km*1000)}m` : `직선 ${km.toFixed(1)}km`;
 }
+
+export function isWithinRadius(km, radius) {
+  return radius === 0 || (Number.isFinite(km) && km <= radius);
+}

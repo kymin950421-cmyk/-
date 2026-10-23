@@ -2,7 +2,7 @@
  if(window.mapConfig?.kakaoKey)return;
  const $ = id=>document.getElementById(id);
  const node=(tag,text)=>{const el=document.createElement(tag);if(text)el.textContent=text;return el;};
- let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null;
+ let map,clusters,markers=new Map(),lastKey='',displayed=[],districtLayers=[],tileErrors=0,lastMembers='',locationDot=null,radiusCircle=null,lastRadius='';
  const centers={'분당구':[37.382,127.117],'수정구':[37.456,127.106],'중원구':[37.434,127.164]};
  const colors={'분당구':'#518e71','수정구':'#91b2a3','중원구':'#719b96'};
  function status(){
@@ -60,6 +60,13 @@
    clusters.addLayers(layers);
    if(withLocations.length && shouldFit)fit();else if(firstLoad)map.setView([37.427,127.13],12);
    status();
+  },
+  setRadius(location,radius,force=false){
+   if(!init())return;const signature=JSON.stringify([location,radius]);if(signature===lastRadius&&!force)return;lastRadius=signature;
+   if(radiusCircle){map.removeLayer(radiusCircle);radiusCircle=null;}
+   if(!location || !radius)return;
+   radiusCircle=L.circle(location,{radius:radius*1000,color:'#008a43',weight:2,opacity:.55,fillOpacity:.06}).addTo(map);
+   map.fitBounds(radiusCircle.getBounds(),{padding:[25,25]});
   },
   locate(location,nearby){
    if(!init())return;
